@@ -1,0 +1,5 @@
+error: AutoError only supports enums
+ --> $DIR/error_struct.rs:4:8
+  |
+4 | struct Error {
+  |        ^^^^^

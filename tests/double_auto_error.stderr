@@ -1,0 +1,5 @@
+error: Duplicate occurence of auto_error attribute
+ --> $DIR/double_auto_error.rs:6:5
+  |
+6 |     #[auto_error()]
+  |     ^^^^^^^^^^^^^^^

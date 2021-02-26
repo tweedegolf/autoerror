@@ -1,0 +1,20 @@
+[package]
+name = "autoerror"
+version = "0.1.0"
+authors = ["David Venhoek <david@tweedegolf.com>"]
+edition = "2018"
+autotests = false
+
+[lib]
+proc-macro = true
+
+[[test]]
+name = "tests"
+path = "tests/main.rs"
+
+[dev-dependencies]
+trybuild = { version = "1.0", features = ["diff"] }
+
+[dependencies]
+syn = { version = "1.0.60", features = ["extra-traits"] }
+quote = "1.0.9"
