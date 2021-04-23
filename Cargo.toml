@@ -1,7 +1,10 @@
 [package]
 name = "autoerror"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["David Venhoek <david@tweedegolf.com>"]
+description = "Automatically generate error handling traits."
+repository = "https://github.com/tweedegolf/autoerror"
+license = "MIT"
 edition = "2018"
 autotests = false
 

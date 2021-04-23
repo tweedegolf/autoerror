@@ -63,6 +63,7 @@ enum Error {
     D(e4::NotError),
     E(String, isize),
     F(),
+    G,
 }
 
 impl From<e2::Error> for Error {
@@ -97,4 +98,8 @@ pub fn main() {
     let f = Error::F();
     assert_eq!(format!("{}", f), "");
     assert!(f.source().is_none());
+
+    let g = Error::G;
+    assert_eq!(format!("{}", g), "");
+    assert!(g.source().is_none());
 }

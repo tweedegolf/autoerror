@@ -1,7 +1,43 @@
+//! Derive basic error type infrastruture for enum types.
+//!
+//! Supports unnamed and unit enum variants, and uses the type definition
+//!  to derive `std::fmt::Display` and `std::error:Error` for the error type,
+//!  as well as `std::from::From<T>` for any unnamed variant with one parameter
+//!  inferred to be an error type (currently determined by whether it's type
+//!  name is Error).
+//!
+//! Default behaviour can be overridden with the auto_error attribute
+//!  - format_str takes a string which becomes the format string for that
+//!    variant
+//!  - make_from forces derivation of std::from::From when set to true
+//!  - err forces the std::error::Error implementation to return the inner
+//!    type during calls to source, or in other words to treat the inner
+//!    type as an error type.
+//!
+//! From derivation and source returning work only for variants with a single field.
+//!
+//! # Example
+//!
+//! ```
+//! #[derive(AutoError)]
+//! use autoerror::AutoError;
+//!
+//! enum Error {
+//!     #[auto_error(format_str="Document not found")]
+//!     NotFound,
+//!     IO(std::io::Error),
+//!     #[auto_error(make_from=true)]
+//!     Other(String),
+//! }
+//! ```
+
 use proc_macro::TokenStream;
 use syn::{parse_macro_input, DeriveInput};
 use quote::{quote, format_ident};
 
+// Infer whether wrapped type is an error
+//  by applying a name based heuristic (type path
+//  last segment is Error)
 fn infer_is_error(variant: &syn::Variant) -> bool {
     if let syn::Fields::Named(_) = variant.fields {
         return false;
@@ -24,6 +60,7 @@ fn infer_is_error(variant: &syn::Variant) -> bool {
     false
 }
 
+// Auto-generate a basic format string for a variant.
 fn infer_format_str(variant: &syn::Variant) -> String {
     let mut result = "".to_string();
     let mut first = true;
@@ -45,12 +82,13 @@ struct ErrorVariant<'a> {
     variant: &'a syn::Variant,
 }
 
+// Parse a single variant in the enum
 fn parse_variant(variant: &syn::Variant) -> Result<ErrorVariant, TokenStream> {
     // validate fields are unnamed (but present!)
     match variant.fields {
         syn::Fields::Named(_) => { return Err(TokenStream::from(syn::Error::new_spanned(variant, "Named fields not supported").to_compile_error())); }
         syn::Fields::Unnamed(_) => {}
-        syn::Fields::Unit => { return Err(TokenStream::from(syn::Error::new_spanned(variant, "Unit variants not supported").to_compile_error())); }
+        syn::Fields::Unit => { }
     }
 
     let mut attr: Option<_> = None;
@@ -108,7 +146,7 @@ fn parse_variant(variant: &syn::Variant) -> Result<ErrorVariant, TokenStream> {
     }
 
     if result.err && result.variant.fields.len() != 1 {
-        return Err(TokenStream::from(syn::Error::new_spanned(variant, "Errors should have exactly 1 argument").to_compile_error()));
+        return Err(TokenStream::from(syn::Error::new_spanned(variant, "Wrapped errors should have exactly 1 argument").to_compile_error()));
     }
 
     if result.make_from && result.variant.fields.len() != 1 {
@@ -118,6 +156,38 @@ fn parse_variant(variant: &syn::Variant) -> Result<ErrorVariant, TokenStream> {
     Ok(result)
 }
 
+/// Derive basic error type infrastruture for enum types.
+///
+/// Supports unnamed and unit enum variants, and uses the type definition
+///  to derive `std::fmt::Display` and `std::error:Error` for the error type,
+///  as well as `std::from::From<T>` for any unnamed variant with one parameter
+///  inferred to be an error type (currently determined by whether it's type
+///  name is Error).
+///
+/// Default behaviour can be overridden with the auto_error attribute
+///  - format_str takes a string which becomes the format string for that
+///    variant
+///  - make_from forces derivation of std::from::From when set to true
+///  - err forces the std::error::Error implementation to return the inner
+///    type during calls to source, or in other words to treat the inner
+///    type as an error type.
+///
+/// From derivation and source returning work only for variants with a single field.
+///
+/// # Example
+///
+/// ```
+/// #[derive(AutoError)]
+/// use autoerror::AutoError;
+///
+/// enum Error {
+///     #[auto_error(format_str="Document not found")]
+///     NotFound,
+///     IO(std::io::Error),
+///     #[auto_error(make_from=true)]
+///     Other(String),
+/// }
+/// ```
 #[proc_macro_derive(AutoError, attributes(auto_error))]
 pub fn derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -158,9 +228,16 @@ pub fn derive(input: TokenStream) -> TokenStream {
         let params: Vec<_> = var.variant.fields.iter().enumerate().map(|(i, _field)| {
             format_ident!("f{}", i)
         }).collect();
-        quote!{
-            Self::#curvar(#(#params),*) => f.write_fmt(format_args!(#format_str #(,#params)*)),
+        match var.variant.fields {
+            syn::Fields::Unnamed(_) => quote!{
+                Self::#curvar(#(#params),*) => f.write_fmt(format_args!(#format_str #(,#params)*)),
+            },
+            syn::Fields::Unit => quote!{
+                Self::#curvar => f.write_fmt(format_args!(#format_str)),
+            },
+            _ => panic!("Internal error (AutoError)")
         }
+        
     });
 
     let source_branches = error_variants.iter().map(|var| {
